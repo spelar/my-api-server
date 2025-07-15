@@ -2,6 +2,7 @@
 import express, { Application } from 'express';
 import userRouter from './routes/user';
 import dotenv from 'dotenv';
+const cors = require('cors');
 
 dotenv.config();
 
@@ -10,6 +11,7 @@ const port = 4000;
 
 app.use(express.json());
 app.use('/user', userRouter);
+app.use(cors());
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
