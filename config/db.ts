@@ -1,6 +1,6 @@
-// MySQL 연결 객체
-const mysql = require('mysql2');
-require('dotenv').config();
+import mysql from 'mysql2';
+import dotenv from 'dotenv';
+dotenv.config();
 
 const connection = mysql.createConnection({
   host: process.env.DB_HOST,
@@ -9,4 +9,4 @@ const connection = mysql.createConnection({
   database: process.env.DB_DATABASE,
 });
 
-module.exports = connection;
+export default connection;
