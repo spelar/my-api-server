@@ -57,3 +57,6 @@ jobs:
             # Nginx 설정 파일 스위칭 (예시: 심볼릭 링크 교체)
             ln -sf /etc/nginx/sites-available/api-$NEW_CONTAINER /etc/nginx/sites-enabled/api
             nginx -s reload 
+
+            # 사용하지 않는 도커 이미지 정리
+            docker image prune -f
