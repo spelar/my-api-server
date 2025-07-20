@@ -9,7 +9,9 @@ dotenv.config();
 const app: Application = express();
 const port = 4000;
 
-app.use(cors());
+app.use(cors({
+  origin: ['https://spelar.shop', 'https://www.spelar.shop'],
+}));
 app.use(express.json());
 app.use('/user', userRouter);
 
