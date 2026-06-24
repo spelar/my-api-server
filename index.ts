@@ -21,7 +21,7 @@ const limiter = rateLimit({
 app.use(limiter);
 
 app.use(cors({
-  origin: ['https://spelar.shop', 'https://www.spelar.shop'],
+  origin: ['https://spelar.store', 'https://www.spelar.store'],
 }));
 app.use(express.json());
 app.use('/user', userRouter);
