@@ -43,20 +43,25 @@ jobs:
             if [ "$ACTIVE" == "my-api-blue" ]; then
               NEW_CONTAINER="my-api-green"
               NEW_PORT=4001
+              OLD_CONTAINER="my-api-blue"
             else
               NEW_CONTAINER="my-api-blue"
               NEW_PORT=4000
+              OLD_CONTAINER="my-api-green"
             fi
 
             # 새 컨테이너 실행
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest
             docker stop $NEW_CONTAINER || true
             docker rm $NEW_CONTAINER || true
-            docker run -d --name $NEW_CONTAINER -p $NEW_PORT:4000 --env-file /root/.env ${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest
+            docker run -d --name $NEW_CONTAINER --restart unless-stopped -p $NEW_PORT:4000 --env-file /root/.env ${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest
 
             # Nginx 설정 파일 스위칭 (예시: 심볼릭 링크 교체)
             ln -sf /etc/nginx/sites-available/api-$NEW_CONTAINER /etc/nginx/sites-enabled/api
-            nginx -s reload 
+            nginx -s reload
+
+            # 이전 컨테이너 정리 (중복 누적 → 메모리 부족/크래시 방지)
+            docker rm -f $OLD_CONTAINER || true
 
             # 사용하지 않는 도커 이미지 정리
             docker image prune -f
