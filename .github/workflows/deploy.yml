@@ -54,7 +54,8 @@ jobs:
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest
             docker stop $NEW_CONTAINER || true
             docker rm $NEW_CONTAINER || true
-            docker run -d --name $NEW_CONTAINER --restart unless-stopped -p $NEW_PORT:4000 --env-file /root/.env ${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest
+            # 127.0.0.1 바인딩 — nginx만 접근 가능, 인터넷에서 직접 접근 차단
+            docker run -d --name $NEW_CONTAINER --restart unless-stopped -p 127.0.0.1:$NEW_PORT:4000 --env-file /root/.env ${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest
 
             # Nginx 설정 파일 스위칭 (예시: 심볼릭 링크 교체)
             ln -sf /etc/nginx/sites-available/api-$NEW_CONTAINER /etc/nginx/sites-enabled/api
