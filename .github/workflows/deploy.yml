@@ -38,31 +38,49 @@ jobs:
             #!/bin/bash
             set -e
 
-            # 현재 활성 컨테이너 확인 (blue or green)
-            ACTIVE=$(docker ps --filter "name=my-api-blue" --format "{{.Names}}")
-            if [ "$ACTIVE" == "my-api-blue" ]; then
-              NEW_CONTAINER="my-api-green"
-              NEW_PORT=4001
-              OLD_CONTAINER="my-api-blue"
+            IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest"
+            # 단일 설정 파일에서 포트만 교체(심볼릭 링크 교체 금지 —
+            # certbot이 한쪽 파일에만 SSL 블록을 넣어 HTTPS가 끊기는 사고가 있었음)
+            NGINX_CONF="/etc/nginx/sites-available/api.conf"
+
+            # nginx가 현재 바라보는 포트로 blue/green 판별
+            CUR_PORT=$(grep -o 'proxy_pass http://127.0.0.1:[0-9]*' $NGINX_CONF | grep -o '[0-9]*' || true)
+            if [ "$CUR_PORT" = "4000" ]; then
+              NEW_CONTAINER="my-api-green"; NEW_PORT=4001; OLD_CONTAINER="my-api-blue"
             else
-              NEW_CONTAINER="my-api-blue"
-              NEW_PORT=4000
-              OLD_CONTAINER="my-api-green"
+              NEW_CONTAINER="my-api-blue";  NEW_PORT=4000; OLD_CONTAINER="my-api-green"
+            fi
+            echo "[배포] 현재 포트 $CUR_PORT → $NEW_CONTAINER ($NEW_PORT)"
+
+            docker pull "$IMAGE"
+
+            # 동명/이전 실패 잔재 제거 (멱등성)
+            docker rm -f $NEW_CONTAINER 2>/dev/null || true
+
+            # 127.0.0.1 바인딩 — nginx만 접근 가능, 인터넷에서 직접 접근 차단
+            docker run -d --name $NEW_CONTAINER --restart unless-stopped \
+              -p 127.0.0.1:$NEW_PORT:4000 --env-file /root/.env "$IMAGE"
+
+            # 헬스체크 — 실패하면 nginx를 바꾸지 않고 롤백(무중단 보장)
+            OK=0
+            for i in $(seq 1 15); do
+              CODE=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:$NEW_PORT/ || true)
+              if [ -n "$CODE" ] && [ "$CODE" != "000" ]; then OK=1; break; fi
+              sleep 2
+            done
+            if [ "$OK" != "1" ]; then
+              echo "[실패] 헬스체크 실패 → 롤백(기존 유지)"
+              docker logs --tail 50 $NEW_CONTAINER || true
+              docker rm -f $NEW_CONTAINER || true
+              exit 1
             fi
 
-            # 새 컨테이너 실행
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest
-            docker stop $NEW_CONTAINER || true
-            docker rm $NEW_CONTAINER || true
-            # 127.0.0.1 바인딩 — nginx만 접근 가능, 인터넷에서 직접 접근 차단
-            docker run -d --name $NEW_CONTAINER --restart unless-stopped -p 127.0.0.1:$NEW_PORT:4000 --env-file /root/.env ${{ secrets.DOCKERHUB_USERNAME }}/my-api-server:latest
-
-            # Nginx 설정 파일 스위칭 (예시: 심볼릭 링크 교체)
-            ln -sf /etc/nginx/sites-available/api-$NEW_CONTAINER /etc/nginx/sites-enabled/api
-            nginx -s reload
+            # nginx 포트 교체 후 문법 검증하고 reload
+            sed -i "s|127.0.0.1:$CUR_PORT|127.0.0.1:$NEW_PORT|g" $NGINX_CONF
+            nginx -t && nginx -s reload
 
             # 이전 컨테이너 정리 (중복 누적 → 메모리 부족/크래시 방지)
-            docker rm -f $OLD_CONTAINER || true
+            docker rm -f $OLD_CONTAINER 2>/dev/null || true
 
             # 사용하지 않는 도커 이미지 정리
             docker image prune -f
